@@ -7,6 +7,7 @@ Created on Sat May  9 13:33:04 2020
 """
 import numpy as np
 import time
+import math
 
 class Game:
     def __init__(self):
@@ -14,9 +15,10 @@ class Game:
 
     def initialize_game(self):
         self.current_state = np.zeros((6, 7), dtype = np.int32)
+        self.move_count = 0
 
         # Player X always plays first
-        self.player_turn = -1
+        self.player_turn = 1
 
     def draw_board(self):
         for i in range(0, 6):
@@ -141,7 +143,7 @@ class Game:
             return (-1, 0)
         elif result == 1:
             return (1, 0)
-        elif result == 0 or curr_depth > 5:
+        elif result == 0 or curr_depth > 2 + math.pow(self.move_count, (1/3)):
             return (0, 0)
     
         # Check all the potential moves 
@@ -196,7 +198,7 @@ class Game:
             return (-1, 0)
         elif result == 1:
             return (1, 0)
-        elif result == 0 or curr_depth > 5:
+        elif result == 0 or curr_depth > 2 + math.pow(self.move_count, (1/3)):
             return (0, 0)
     
         # Check all the potential moves 
@@ -250,6 +252,12 @@ class Game:
     
                     start = time.time()
                     (m, qx) = self.min_state(-2, 2)
+                    if m == 1: 
+                        #print("X is without hope")
+                        pass
+                    elif m == -1:
+                        pass
+                        #print("X has found a winning move")
                     end = time.time()
                     print('Evaluation time: {}s'.format(round(end - start, 7)))
                     print('Recommended move: column = {}'.format(qx))
@@ -263,18 +271,85 @@ class Game:
                         self.player_turn = 1
                         break
                     else:
+                        pass
                         print('The move is not valid! Try again.')
     
             # If it's AI's turn
             else:
                 (m, px) = self.max_state(-2, 2)
+                if m == 1:
+                    print("O has found a winning move! {}".format(px))
+                elif m == -1:
+                    print("O is without hope")
                 self.drop_token(px, 1)
                 self.player_turn = -1
 
-            
+    def check_for_win_or_loss(self):
+        
+        # If we can win the game (Max Found = 1), then that is the
+        # move we must make.
+        old_state = self.current_state.copy()
+        (m, px) = self.max_state(-2, 2)
+        self.current_state = old_state
+        if m == 1:
+            #print("O has found a winning move! {}".format(px))
+            return (1, px)
+        elif m == -1: 
+            #print("O is without hope")
+            return (-1, px)
+        else:
+            #print("No Winning moves found")
+            return (0, px)
+        
+        # If maxfound is 0, test to see if making a move leads to the 
+        # opponent finding a win. If so, override the move. 
     
+    def verify_move(self, move):
+        old_state = self.current_state.copy()
+        valid_move = self.is_valid(move)
+        # If the move we selected is invalid, pick the best available move
+        if not valid_move:
+            (m, qx) = self.max_state(-2, 2)
+            self.current_state = old_state
+            return qx
+        # If the move is valid, drop the token and see if it leads to a lost 
+        # state if so, pick the best available move
+        self.drop_token(move, 1)
+        self.player_turn = -1
+        (m, qx) = self.min_state(-2, 2)
+        #print(m, "max val")
+        if m == -1:
+            self.move_count += 1
+            #print("This Leads to a losing move! {}".format(qx))
+            self.current_state = old_state
+            self.player_turn = 1
+            (m, qx) = self.max_state(-2, 2)
+            #print("Selected a safe move, {}".format(qx))
+            self.current_state = old_state
+            return qx
+        # If the move is safe, return this move. 
+        else: 
+            #print("No Move Danger detected")
+            self.current_state = old_state
+            self.player_turn = 1
+            return move
+            
+    def make_board_from_observation(self, observation, opponent):
+        board = np.array(observation)
+        board = np.array(list(map(lambda x: x if x != opponent else -1, board)))
+        board = board.reshape(6, 7)
+        print(board)
+        return board
+        
+    
+    def make_opponent_move(self, observation, opponent):
+        self.current_state = self.make_board_from_observation(observation, opponent)
+        
+        
+        
     
         
         
 g = Game()
-print(g.play())
+g.check_for_win_or_loss()
+g.verify_move(0)
